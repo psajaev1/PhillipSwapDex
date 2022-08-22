@@ -4,7 +4,8 @@ pragma solidity ^0.8.9;
 import "@rari-capital/solmate/src/tokens/ERC20.sol";
 import "./libraries/Math.sol";
 import "./libraries/UQ112x112.sol";
-import "./interfaces/ISwapCallee.sol";
+import "./SwapLibrary.sol";
+import "hardhat/console.sol";
 
 
 
@@ -17,6 +18,7 @@ error InsufficientLiquidity();
 error InvalidProduct();
 error BalanceOverflow();
 error AlreadyInitialized();
+error SafeTransferFailed();
 
 interface IERC20 {
     function balanceOf(address) external returns (uint256);
@@ -46,6 +48,7 @@ contract Pair is ERC20, Math {
     event Mint(address indexed sender, uint256 amount0, uint256 amount1);
     event Sync(uint256 reserve0, uint256 reserve1);
     event Swap(address indexed sender, uint256 amountOut0, uint256 amountOut1, address indexed to);
+    event SwapPrice(uint256 swapPrice);
 
     modifier nonReentrant() {
         require(!isEntered);
@@ -74,6 +77,12 @@ contract Pair is ERC20, Math {
         uint256 balance1 = IERC20(token1).balanceOf(address(this));
         uint256 amount0 = balance0 - reserve0_;
         uint256 amount1 = balance1 - reserve1_;
+
+        console.log("&&&&&&&&&&&&");
+        console.log(balance0);
+        console.log(balance1);
+        console.log(amount0);
+        console.log(amount1);
 
         if (totalSupply == 0){
             liquidity = Math.sqrt(amount0 * amount1) - MINIMUM_LIQUIDITY;
@@ -119,48 +128,142 @@ contract Pair is ERC20, Math {
     }
 
 
-    function swap(uint256 amountOut0, uint256 amountOut1, address to, bytes calldata data)
-     public nonReentrant {
+    // function swap(address tokenIn, uint256 amountIn, address to)
+    //  public nonReentrant {
 
-        if (amountOut0 == 0 && amountOut1 == 0)
+    //     if (amountIn <= 0)
+    //         revert InsufficientInputAmount();
+
+    //     (uint112 reserve0_, uint112 reserve1_, ) = getReserves();
+
+    //     // if (amountOut0 > reserve0_ || amountOut1 > reserve1_)
+    //     //     revert InsufficientLiquidity();     
+
+
+
+        
+
+    //     uint256 amountRecieved;
+    //     if (tokenIn == token0)
+    //         amountRecieved = SwapLibrary.getAmountOut(amountIn, reserve0_, reserve1_);
+    //     else 
+    //         amountRecieved = SwapLibrary.getAmountOut(amountIn, reserve1_, reserve0_);
+
+    //     address tokenOut = tokenIn == token0 ? token1 : token0;
+
+    //     // you trade in the tokens, then contract gives you it back 
+    //     _safeTransferFrom(tokenIn, to, address(this), amountIn);
+
+    //     _safeTransferFrom(tokenOut, address(this), to, amountRecieved);
+
+
+    //     uint256 balance0 = IERC20(token0).balanceOf(address(this));
+    //     uint256 balance1 = IERC20(token1).balanceOf(address(this));
+
+    //     // // not sure what to do with constant product check
+    //     // uint256 balanceAdjusted0 = (balance0 * 1000) - (amountIn0 * 3);
+    //     // uint256 balanceAdjusted1 = (balance1 * 1000) - (amountIn1 * 3);
+
+    //     if (balance0 * balance1 < uint256(reserve0_) * uint256(reserve1_) * 1000**2)
+    //         revert InvalidProduct();
+
+    //     _update(balance0, balance1, reserve0_, reserve1_);
+    //     emit Swap(msg.sender, amountIn, amountRecieved, to);
+
+        
+    // }
+
+    function swap(
+        uint256 amount0Out,
+        uint256 amount1Out,
+        address to,
+        bytes calldata data
+    ) public nonReentrant {
+        if (amount0Out == 0 && amount1Out == 0)
             revert InsufficientOutputAmount();
 
+        // 
         (uint112 reserve0_, uint112 reserve1_, ) = getReserves();
 
-        if (amountOut0 > reserve0_ || amountOut1 > reserve1_)
-            revert InsufficientLiquidity();     
+        if (amount0Out > reserve0_ || amount1Out > reserve1_)
+            revert InsufficientLiquidity();
 
-        if (amountOut0 > 0)
-            _safeTransfer(token0, to, amountOut0);
-        
-        if (amountOut1 > 0)
-            _safeTransfer(token1, to, amountOut1);
+        if (amount0Out > 0) _safeTransfer(token0, to, amount0Out);
+        if (amount1Out > 0) _safeTransfer(token1, to, amount1Out);
+        // if (data.length > 0)
+        //     IZuniswapV2Callee(to).zuniswapV2Call(
+        //         msg.sender,
+        //         amount0Out,
+        //         amount1Out,
+        //         data
+        //     );
+        console.log("!!!");
+        console.log(reserve0_);
+        console.log(reserve1_);
+        console.log(amount0Out);
+        console.log(amount1Out);
+        console.log(reserve0);
+        console.log(reserve1);
 
-        if (data.length > 0)
-            SwapCallee(to).swapCall(msg.sender, amountOut0, amountOut1, data);
+
 
         uint256 balance0 = IERC20(token0).balanceOf(address(this));
         uint256 balance1 = IERC20(token1).balanceOf(address(this));
 
-        uint256 amountIn0 = balance0 > reserve0 - amountOut0 ? balance0 - (reserve0 - amountOut0)
-             : 0;
-        uint256 amountIn1 = balance1 > reserve1 - amountOut1 ? balance1 - (reserve1 - amountOut1)
+        console.log(balance0);
+        console.log(balance1);
+
+        uint256 amount0In = balance0 > reserve0_ - amount0Out
+            ? balance0 - (reserve0_ - amount0Out)
             : 0;
+        uint256 amount1In = balance1 > reserve1_ - amount1Out
+            ? balance1 - (reserve1_ - amount1Out)
+            : 0;
+
+        if (amount0In == 0 && amount1In == 0) revert InsufficientInputAmount();
+
+        // Adjusted = balance before swap - swap fee; fee stays in the contract
+        uint256 balance0Adjusted = (balance0 * 1000) - (amount0In * 3);
+        uint256 balance1Adjusted = (balance1 * 1000) - (amount1In * 3);
+
+        if (
+            balance0Adjusted * balance1Adjusted <
+            uint256(reserve0_) * uint256(reserve1_) * (1000**2)
+        ) revert InvalidProduct();
+
+        _update(balance0, balance1, reserve0, reserve1);
+
+        emit Swap(msg.sender, amount0Out, amount1Out, to);
+    }
+
+
+    function getSwapPrice(uint256 amountOut0, uint256 amountOut1, address to) public {
+        if (amountOut0 == 0 && amountOut1 == 0)
+            revert InsufficientOutputAmount();
+
+
+        uint256 balance0 = IERC20(token0).balanceOf(address(this));
+        uint256 balance1 = IERC20(token1).balanceOf(address(this));
+
+        console.log(balance0);
+        console.log(balance1);
+
+        uint256 amountIn0 = 
+            balance0 > reserve0 - amountOut0 ? balance0 - (reserve0 - amountOut0) : 0;
+        uint256 amountIn1 = 
+            balance1 > reserve1 - amountOut1 ? balance1 - (reserve1 - amountOut1) : 0;
+
+        console.log(amountIn0);
+        console.log(amountIn1);
 
         if (amountIn0 == 0 && amountIn1 == 0)
             revert InsufficientInputAmount();
 
-        uint256 balanceAdjusted0 = (balance0 * 1000) - (amountIn0 * 3);
-        uint256 balanceAdjusted1 = (balance1 * 1000) - (amountIn1 * 3);
-
-        if (balanceAdjusted0 * balanceAdjusted1 < uint256(reserve0) * uint256(reserve1) * 1000**2)
-            revert InvalidProduct();
-
-        _update(balance0, balance1, reserve0, reserve1);
-        emit Swap(msg.sender, amountOut0, amountOut1, to);
-
+        uint256 swapPrice = (amountOut0 * 1000) / amountIn0;
+        emit SwapPrice(swapPrice);
         
     }
+
 
     function sync() public {
         (uint112 reserve0_, uint112 reserve1_, ) = getReserves();
@@ -207,10 +310,32 @@ contract Pair is ERC20, Math {
     function _safeTransfer(address token, address to, uint256 value) private {
         (bool success, bytes memory data) = token.call(abi.encodeWithSignature("transfer(address,uint256)", to, value));
 
+
+        console.log(success);
         if (!success || (data.length != 0 && !abi.decode(data, (bool)))){
             revert TransferFailed();
         }
     }
+
+
+    function _safeTransferFrom(address token, address from, address to, uint256 value) private {
+
+        (bool success, bytes memory data) = token.call(
+            abi.encodeWithSignature(
+                "transferFrom(address,address,uint256)",
+                from,
+                to,
+                value
+            )
+        );
+
+        if (!success || (data.length != 0 && !abi.decode(data, (bool))))
+            revert SafeTransferFailed();    
+
+    }
+
+
+
 
 }
 

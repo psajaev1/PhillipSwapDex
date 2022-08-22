@@ -5,18 +5,18 @@ pragma solidity ^0.8.9;
 import "./interfaces/ISwapFactory.sol";
 import "./interfaces/IPair.sol";
 import "./SwapLibrary.sol";
+import "hardhat/console.sol";
 
 contract Router {
 
-
-
     ISwapFactory factory;
-
 
     error InsufficientAAmount();
     error InsufficientBAmount();
     error SafeTransferFailed();
     error InsufficientOutputAmount();
+
+    event LiquidityAdded(address indexed _pairing, uint256 _amountA, uint256 _amountB);
 
 
     constructor(address factoryAddress) {
@@ -41,25 +41,25 @@ contract Router {
             amountMinB
         );
 
+
         address pairAddress = SwapLibrary.pairFor(
             address(factory),
             tokenA,
             tokenB
         );
 
-
         _safeTransferFrom(tokenA, msg.sender, pairAddress, amountA);
         _safeTransferFrom(tokenB, msg.sender, pairAddress, amountB);
 
-
         // this is where error is
         liquidity = IPair(pairAddress).mint(to);
+        emit LiquidityAdded(pairAddress, amountA, amountB);
 
 
     }
 
     function removeLiquidity(address tokenA, address tokenB, uint256 liquidity, uint256 amountMinA,
-        uint256 amountMinB, address to) public returns (uint256 amountA, uint256 amountB) {
+        uint amountMinB, address to) public returns (uint256 amountA, uint256 amountB) {
             address pair = SwapLibrary.pairFor(address(factory), tokenA, tokenB);
             IPair(pair).transferFrom(msg.sender, pair, liquidity);
             (amountA, amountB) = IPair(pair).burn(to);
@@ -71,7 +71,7 @@ contract Router {
                 revert InsufficientBAmount();
     }
 
-    function _swap(uint256[] memory amounts, address[] memory path, address _to) internal {
+    function _swap(uint[] memory amounts, address[] memory path, address _to) internal {
         for (uint256 i; i < path.length - 1; i++){
             (address input, address output) = (path[i], path[i + 1]);
             (address token0, ) = SwapLibrary.sortTokens(input, output);
@@ -116,8 +116,6 @@ contract Router {
 
                 uint256 amountOptimalA = SwapLibrary.quote(amountDesiredB, reserveB, reserveA);
 
-
-
                 assert(amountOptimalA <= amountDesiredA);
                 if (amountOptimalA <= amountMinA){
                     revert InsufficientAAmount();
@@ -148,7 +146,6 @@ contract Router {
 
     function _safeTransferFrom(address token, address from, address to, uint256 value) private {
 
-
         (bool success, bytes memory data) = token.call(
             abi.encodeWithSignature(
                 "transferFrom(address,address,uint256)",
@@ -157,8 +154,11 @@ contract Router {
                 value
             )
         );
+
         if (!success || (data.length != 0 && !abi.decode(data, (bool))))
             revert SafeTransferFailed();    
+
     }
+
 
 }

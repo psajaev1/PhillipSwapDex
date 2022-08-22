@@ -28,6 +28,41 @@ async function main() {
 
   console.log("Account balance:", (await deployer.getBalance()).toString());
 
+  const Math = await ethers.getContractFactory("Math");
+  const math = await Math.deploy();
+  await math.deployed();
+
+
+  addressJson["Math"] = math.address;
+
+
+  const mathArtifact = artifacts.readArtifactSync("Math");
+
+  fs.writeFileSync(
+    path.join(contractsDir, "Math.json"),
+    JSON.stringify(mathArtifact, null, 2)
+  );
+
+  console.log("Math address:", math.address);
+
+  const UQ112x112 = await ethers.getContractFactory("UQ112x112");
+  const uQ112x112 = await UQ112x112.deploy();
+  await uQ112x112.deployed();
+
+
+  addressJson["UQ112x112"] = uQ112x112.address;
+
+  const UQ112x112Artifact = artifacts.readArtifactSync("UQ112x112");
+
+  fs.writeFileSync(
+    path.join(contractsDir, "UQ112x112.json"),
+    JSON.stringify(UQ112x112Artifact, null, 2)
+  );
+
+  console.log("UQ112x112 address:", uQ112x112.address);
+
+
+
   const TokenA = await ethers.getContractFactory("TokenA");
   const tokenA = await TokenA.deploy();
   await tokenA.deployed();
@@ -128,38 +163,7 @@ async function main() {
   console.log("Router address:", router.address);
 
 
-  const Math = await ethers.getContractFactory("Math");
-  const math = await Math.deploy();
-  await math.deployed();
 
-
-  addressJson["Math"] = math.address;
-
-
-  const mathArtifact = artifacts.readArtifactSync("Math");
-
-  fs.writeFileSync(
-    path.join(contractsDir, "Math.json"),
-    JSON.stringify(mathArtifact, null, 2)
-  );
-
-  console.log("Math address:", math.address);
-
-  const UQ112x112 = await ethers.getContractFactory("UQ112x112");
-  const uQ112x112 = await UQ112x112.deploy();
-  await uQ112x112.deployed();
-
-
-  addressJson["UQ112x112"] = UQ112x112.address;
-
-  const UQ112x112Artifact = artifacts.readArtifactSync("UQ112x112");
-
-  fs.writeFileSync(
-    path.join(contractsDir, "UQ112x112.json"),
-    JSON.stringify(UQ112x112Artifact, null, 2)
-  );
-
-  console.log("UQ112x112 address:", uQ112x112.address);
 
   saveToFrontEnd();
 

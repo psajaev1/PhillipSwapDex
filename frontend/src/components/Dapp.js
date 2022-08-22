@@ -7,8 +7,10 @@ import { ethers } from "ethers";
 // using them with ethers
 import TokenAArtifact from "../contracts/TokenA.json";
 import TokenBArtifact from "../contracts/TokenB.json";
-import PairArtifact from "../contracts/TokenB.json";
+import PairArtifact from "../contracts/Pair.json";
 import swapFactoryArtifact from "../contracts/SwapFactory.json";
+import swapLibraryArtifact from "../contracts/SwapLibrary.json";
+import routerArtifact from "../contracts/Router.json";
 
 
 import contractAddress from "../contracts/contract-address.json";
@@ -28,6 +30,8 @@ const HARDHAT_NETWORK_ID = '1337';
 const ERROR_CODE_TX_REJECTED_BY_USER = 4001;
 
 export class Dapp extends React.Component {
+
+
   constructor(props) {
     super(props);
 
@@ -43,7 +47,11 @@ export class Dapp extends React.Component {
       txBeingSent: undefined,
       transactionError: undefined,
       networkError: undefined,
+      currentPairing: undefined,
+      swapPrice: undefined,
     };
+
+    this.setSwapPrice = this.setSwapPrice.bind(this);
 
     this.state = this.initialState;
   }
@@ -69,7 +77,7 @@ export class Dapp extends React.Component {
 
     // If the token data or the user's balance hasn't loaded yet, we show
     // a loading component.
-    if (!this.state.tokenDataA || !this.state.balanceA || !this.state.tokenDataB) {
+    if (!this.state.balanceA || !this.state.tokenDataB) {
       return <Loading />;
     }
 
@@ -140,19 +148,20 @@ export class Dapp extends React.Component {
             <CurrencyField
               field="input"
               tokenName={this.state.tokenDataA.nameA}
-              getSwapPrice={1.5}
+              signer={this._provider.getSigner(0)}
+              setSwapPrice={this.setSwapPrice}
               balance={Number(this.state.balanceA)} />
             <CurrencyField
               field="output"
               tokenName={this.state.tokenDataB.nameB}
-              defaultValue={22}
+              value={0}
               balance={Number(this.state.balanceB)}
                />
           </div>
 
           <div className="ratioContainer">
               <>
-                {'Stuff'}
+                {'Swap Price is: ' + this.state.swapPrice}
               </>
           </div>
 
@@ -172,6 +181,12 @@ export class Dapp extends React.Component {
     );
   }
 
+  setSwapPrice(swapPrice) {
+
+      console.log("lol does this hit");
+      this.setState({ swapPrice: swapPrice});
+  }  
+
   componentWillUnmount() {
     // We poll the user's balance, so we have to stop doing that when Dapp
     // gets unmounted
@@ -187,13 +202,6 @@ export class Dapp extends React.Component {
     const [selectedAddress] = await window.ethereum.request({ method: 'eth_requestAccounts' });
 
     console.log(selectedAddress);
-
-    // Once we have the address, we can initialize the application.
-
-    // First we check the network
-    // if (!this._checkNetwork()) {
-    //   return;
-    // }
 
     this._initialize(selectedAddress);
 
@@ -229,11 +237,13 @@ export class Dapp extends React.Component {
     // Fetching the token data and the user's balance are specific to this
     // sample project, but you can reuse the same initialization pattern.
     this._initializeEthers();
-    this._getTokenDataB();
     this._getTokenDataA();
+    this._getTokenDataB();
 
 
-    this._createPairing();
+    // this._createPairing();
+
+    // this._setUpPool();
 
     this._startPollingData();
   }
@@ -262,11 +272,24 @@ export class Dapp extends React.Component {
       this._provider.getSigner(0)
     );
 
+    this._swapRouter = new ethers.Contract(
+      contractAddress.Router,
+      routerArtifact.abi,
+      this._provider.getSigner(0)
+    );
+
+    this._swapLibrary = new ethers.Contract(
+      contractAddress.SwapLibrary,
+      swapLibraryArtifact.abi,
+      this._provider.getSigner(0)
+    );
+
     this._swapFactory = new ethers.Contract(
       contractAddress.SwapFactory,
       swapFactoryArtifact.abi,
       this._provider.getSigner(0)
     );
+
   }
 
 
@@ -274,7 +297,7 @@ export class Dapp extends React.Component {
   // don't need to poll it. If that's the case, you can just fetch it when you
   // initialize the app, as we do with the token data.
   _startPollingData() {
-    this._pollDataInterval = setInterval(() => this._updateBalances(), 1000);
+    this._pollDataInterval = setInterval(() => this._updateBalances(), 60000);
 
     // We run it once immediately so we don't have to wait for it
     this._updateBalanceA();
@@ -290,16 +313,17 @@ export class Dapp extends React.Component {
   // The next two methods just read from the contract and store the results
   // in the component state.
   async _getTokenDataA() {
-    const nameA = await this._tokenA.nameA();
-    const symbolA = await this._tokenA.symbolA();
+    const nameA = await this._tokenA.name();
+    const symbolA = await this._tokenA.symbol();
+    console.log(nameA);
 
     this.setState({ tokenDataA: { nameA, symbolA } });
 
   }
 
   async _getTokenDataB() {
-    const nameB = await this._tokenB.nameB();
-    const symbolB = await this._tokenB.symbolB();
+    const nameB = await this._tokenB.name();
+    const symbolB = await this._tokenB.symbol();
 
     this.setState({ tokenDataB: { nameB, symbolB } });
   }
@@ -344,49 +368,92 @@ export class Dapp extends React.Component {
     this.setState(this.initialState);
   }
 
-  // This method checks if Metamask selected network is Localhost:8545 
-  // _checkNetwork() {
-  //   if (window.ethereum.networkVersion === HARDHAT_NETWORK_ID) {
-  //     return true;
-  //   }
-
-  //   this.setState({ 
-  //     networkError: 'Please connect Metamask to Localhost:8545'
-  //   });
-
-  //   return false;
-  // }
-
-
   async _createPairing() {
+
     try {
-      console.log(this._tokenA.address, this._tokenB.address);
-      console.log("----");
-      const pairAddress = await this._swapFactory.createPairing(this._tokenA.address, this._tokenB.address);
-      console.log(pairAddress);
-      console.log("@@@@@@@@@@@@@@@@@@@@");
-      console.log(this._swapFactory.allPairings[0]);
+      const tempcurrentPairing = await this._swapFactory.createPairing(this._tokenA.address, this._tokenB.address);
+      const currentPairing = await tempcurrentPairing.wait();
+      const newPair = currentPairing.events;
+      console.log(newPair);
+      this.setState({ currentPairing: newPair });
     } catch (error) {
-      console.log(this._swapFactory.allPairings[0]);
       console.log(error);
     }
 
   }
 
-  // need to figure out how to register pair and then how to call that pair contract
+  async _setUpPool() {
+
+    const initialSupplyPoolApproval = ethers.utils.hexZeroPad(ethers.utils.hexlify(20000), 16);
+    const initialSupplyPool = ethers.utils.hexZeroPad(ethers.utils.hexlify(2000), 16);
+    try {
+      await this._tokenA.approve(contractAddress.Router, initialSupplyPoolApproval);
+      await this._tokenB.approve(contractAddress.Router, initialSupplyPoolApproval);
+      let mintTx = await this._swapRouter.addLiquidity(this._tokenA.address, this._tokenB.address,
+        initialSupplyPool, initialSupplyPool, initialSupplyPool, initialSupplyPool, this.state.selectedAddress);
+      const mintInfo = await mintTx.wait();
+      console.log(mintInfo);
+      this._updateBalances();
+    } catch (error){
+      console.error(error);
+    }
+
+
+  }
+
+  // start working on swapping function, maybe work out the front end part first
   async _swapTokens() {
-    console.log("gets to swapToken");
-    console.log(this._swapFactory.allPairings[0]);
-    // const currentPairContract = new ethers.Contract
-    // const pairLiquidity = this._pair
+
+    try {
+      const userInputAmount = document.getElementById('currencyInputField').value;
+      console.log(userInputAmount);
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+
+      const pairContract = new ethers.Contract(
+        this._swapFactory.allPairings(0),
+        PairArtifact.abi,
+        provider.getSigner(0)
+      );  
+
+      const swapLibraryContract = new ethers.Contract(
+        contractAddress.SwapLibrary,
+        swapLibraryArtifact.abi,
+        provider.getSigner(0)
+      );  
+
+      const reservesTx = await pairContract.getReserves();
+      // const reservesObj = await reservesTx.wait();
+      console.log(reservesTx);
+
+      const reserve0 = reservesTx[0];
+      const reserve1 = reservesTx[1];
+
+
+      const quotePrice = await this._swapLibrary.quote(userInputAmount, reserve0, reserve1);
+      const amountInRequired = quotePrice.toNumber() * 1.04;
+
+      await this._tokenA.approve(this.state.selectedAddress, amountInRequired);
+      const resultTransfer = await this._tokenA.transferFrom(this.state.selectedAddress, this._swapFactory.allPairings(0), amountInRequired);
+      console.log(resultTransfer);
+      console.log("gets past transfer from");
+
+      // const mintTx = await this._swapRouter.addLiquidity(this._tokenA.address, this._tokenB.address,
+      //   initialSupplyPool, initialSupplyPool, initialSupplyPool, initialSupplyPool, this.state.selectedAddress);
+      // const mintInfo = await mintTx.wait();
+
+      // remember this is the output amount in the parameters
+      const swapTokenTx = await pairContract.swap(0, userInputAmount, this.state.selectedAddress, "0x00");
+      const swapResult = await swapTokenTx.wait();
+      console.log(swapResult);
+
+    } catch (error) {
+      console.error(error);
+    }
+
 
   }
 
 
-
-  async _setUpDexFunction() {
-    
-  }
 
 
 }
