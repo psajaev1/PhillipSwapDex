@@ -91,6 +91,50 @@ async function main() {
 
   console.log("TokenB address:", tokenB.address);
 
+
+  const TokenC = await ethers.getContractFactory("TokenC");
+  const tokenC = await TokenC.deploy();
+  await tokenC.deployed();
+  addressJson["TokenC"] = tokenB.address;
+
+  const TokenCArtifact = artifacts.readArtifactSync("TokenC");
+
+  fs.writeFileSync(
+    path.join(contractsDir, "TokenC.json"),
+    JSON.stringify(TokenCArtifact, null, 2)
+  );
+
+  console.log("TokenC address:", tokenC.address);
+
+  const TokenD = await ethers.getContractFactory("TokenD");
+  const tokenD = await TokenD.deploy();
+  await tokenD.deployed();
+  addressJson["TokenD"] = tokenD.address;
+
+  const TokenDArtifact = artifacts.readArtifactSync("TokenD");
+
+  fs.writeFileSync(
+    path.join(contractsDir, "TokenB.json"),
+    JSON.stringify(TokenDArtifact, null, 2)
+  );
+
+  console.log("TokenD address:", tokenD.address);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   const Pair = await ethers.getContractFactory("Pair");
   const pair = await Pair.deploy();
   await pair.deployed();

@@ -16,12 +16,16 @@ import routerArtifact from "../contracts/Router.json";
 import contractAddress from "../contracts/contract-address.json";
 
 import { NoWalletDetected } from "./NoWalletDetected";
+import PageButton  from "./PageButton"
 import { ConnectWallet } from "./ConnectWallet";
 import { Loading } from "./Loading";
 import { TransactionErrorMessage } from "./TransactionErrorMessage";
 import { WaitingForTransactionMessage } from "./WaitingForTransactionMessage";
 import { GearFill } from 'react-bootstrap-icons';
 import CurrencyField from './CurrencyField';
+import { Link } from 'react-router-dom';
+
+
 import './Dapp.css';
 // This is the Hardhat Network id that we set in our hardhat.config.js.
 
@@ -36,19 +40,21 @@ export class Dapp extends React.Component {
     super(props);
 
     this.initialState = {
-      // The info of the token (i.e. It's Name and symbol)
       tokenDataA: undefined,
       tokenDataB: undefined,
-      // The user's address and balance
       selectedAddress: undefined,
+      tokenAddressA: undefined,
+      tokenAddressB: undefined,
       balanceA: undefined,
       balanceB: undefined,
-      // The ID about transactions being sent, and any possible error with them
+      // The ID about  being sent, and any possible error with them
       txBeingSent: undefined,
       transactionError: undefined,
       networkError: undefined,
       currentPairing: undefined,
       swapPrice: undefined,
+      swapOutputAmount: undefined,
+      allPairStrings: undefined,
     };
 
     this.setSwapPrice = this.setSwapPrice.bind(this);
@@ -75,11 +81,13 @@ export class Dapp extends React.Component {
       );
     }
 
-    // If the token data or the user's balance hasn't loaded yet, we show
-    // a loading component.
+    // // If the token data or the user's balance hasn't loaded yet, we show
+    // // a loading component.
     if (!this.state.balanceA || !this.state.tokenDataB) {
       return <Loading />;
     }
+
+    
 
 
     // If everything is loaded, we render the application.
@@ -126,7 +134,6 @@ export class Dapp extends React.Component {
           </div>
         </div>
 
-
         <div className="DappBody">
         <div className="swapContainer">
           <div className="swapHeader">
@@ -148,26 +155,37 @@ export class Dapp extends React.Component {
             <CurrencyField
               field="input"
               tokenName={this.state.tokenDataA.nameA}
+              tokenSymbol={this.state.tokenDataA.symbolA}
+              tokenAddress={this.state.tokenAddressA}
               signer={this._provider.getSigner(0)}
               setSwapPrice={this.setSwapPrice}
               balance={Number(this.state.balanceA)} />
+          <button
+            className="switchButton"
+            type="button"
+            onClick={() => this._switchButtonState(this.state.tokenAddressB, this.state.tokenAddressA)}
+          >
+            ↓
+          </button>
             <CurrencyField
               field="output"
               tokenName={this.state.tokenDataB.nameB}
-              value={0}
+              tokenSymbol={this.state.tokenDataB.symbolB}
+              tokenAddress={this.state.tokenAddressB}
+              value={this.state.swapOutputAmount}
               balance={Number(this.state.balanceB)}
                />
           </div>
 
           <div className="ratioContainer">
               <>
-                {'Swap Price is: ' + this.state.swapPrice}
+                {'1 ' + this.state.tokenDataA.symbolA + ' = ' + this.state.swapPrice + ' ' + this.state.tokenDataB.symbolB}
               </>
           </div>
 
           <div className="swapButtonContainer">
               <div
-                onClick={() => this._swapTokens()}
+                onClick={() => this._swapTokens(this.state.tokenAddressA, this.state.tokenAddressB)}
                 className="swapButton"
               >
                 Swap
@@ -175,30 +193,84 @@ export class Dapp extends React.Component {
           </div>
 
         </div>
-      </div>
+
+        <div>Create Pairing: </div>
+        <input type="text" id="addresstoken0" placeholder="Address0" />
+        <input type="text" id="addresstoken1" placeholder="Address1" />
+        <button
+            className="createPairButton"
+            type="button"
+            onClick={() => this._createNewPairing()}
+          >Create Pairing </button>    
+
+
+
+        <div>Switch current Pairing</div> 
+        <select id="selectpair" onChange={() => this._loadPair()}>
+          <option>Choose Pair</option>
+        </select>
+           </div>
+
+
+           
       </>
 
     );
+
+
+
   }
+
+
+
+  
 
   setSwapPrice(swapPrice) {
 
-      console.log("lol does this hit");
-      this.setState({ swapPrice: swapPrice});
-  }  
+      const userInputAmount = document.getElementById('currencyInputField').value;
+      var userOutputAmount;
+
+      if (userInputAmount.length <= 0){
+        this.setState({ swapPrice: 0});
+        this.setState({ swapOutputAmount: 0});
+      } else {
+        userOutputAmount = userInputAmount * swapPrice;
+        this.setState({ swapPrice: swapPrice});
+        this.setState({ swapOutputAmount: userOutputAmount});
+      }
+
+  }
+
+  async _loadPair() {
+    const f = document.getElementById("selectpair");
+    var selectedOption = f.options[f.selectedIndex].value;
+
+    console.log("get to the onchange handler");
+    console.log(selectedOption);
+    const addresses = selectedOption.split(',');
+    console.log(addresses[0]);
+    console.log(addresses[1]);
+
+    this._switchButtonState(addresses[0], addresses[1]);
+  }
+
+
+  resetSwapPrice() {
+    const userInputAmount = document.getElementById('currencyInputField');
+    userInputAmount.value = 0;
+    this.setState({ swapPrice: 0});
+    this.setState({ swapOutputAmount: 0});
+  }
 
   componentWillUnmount() {
-    // We poll the user's balance, so we have to stop doing that when Dapp
-    // gets unmounted
+
     this._stopPollingData();
   }
 
-  async _connectWallet() {
-    // This method is run when the user clicks the Connect. It connects the
-    // dapp to the user's wallet, and initializes it.
 
-    // To connect to the user's wallet, we have to run this method.
-    // It returns a promise that will resolve to the user's address.
+
+  async _connectWallet() {
+
     const [selectedAddress] = await window.ethereum.request({ method: 'eth_requestAccounts' });
 
     console.log(selectedAddress);
@@ -221,6 +293,8 @@ export class Dapp extends React.Component {
       this._stopPollingData();
       this._resetState();
     });
+
+
   }
 
   _initialize(userAddress) {
@@ -240,12 +314,65 @@ export class Dapp extends React.Component {
     this._getTokenDataA();
     this._getTokenDataB();
 
+    this._createPairing();
 
-    // this._createPairing();
+    this._setUpPool();
 
-    // this._setUpPool();
-
+    this._getPairingData();
     this._startPollingData();
+
+
+  }
+
+  async _getPairingData() {
+
+    const allPoolsLength = await this._swapFactory.getPairingSize();
+    var allPools = [];
+    var allPairContracts = [];
+    for (var i = 0; i < allPoolsLength; i++){
+      const optionContract = new ethers.Contract(
+        this._swapFactory.allPairings(i),
+        PairArtifact.abi,
+        this._provider.getSigner(0)
+      );
+
+      const optionTokenA = new ethers.Contract(
+        optionContract.token0(),
+        PairArtifact.abi,
+        this._provider.getSigner(0)
+      ); 
+
+      const optionTokenB = new ethers.Contract(
+        optionContract.token1(),
+        PairArtifact.abi,
+        this._provider.getSigner(0)
+      ); 
+
+
+      const tokenAsymbol = await optionTokenA.symbol();
+      const tokenAaddressOption = await optionTokenA.address;
+      const tokenBsymbol = await optionTokenB.symbol();
+      const tokenBaddressOption = await optionTokenB.address;
+      var tokenAddressPool = [];
+      tokenAddressPool.push(tokenAaddressOption);
+      tokenAddressPool.push(tokenBaddressOption);
+
+      const optionString = "(" + tokenAsymbol + "," + tokenBsymbol + ")";
+      allPools.push(optionString);
+      allPairContracts.push(tokenAddressPool);
+    }
+
+
+    this.setState({ allPairStrings: allPools});
+    const select = document.getElementById("selectpair");
+
+    for (var i = 0; i < allPools.length; i++){
+      var el = document.createElement("option");
+      el.textContent = allPools[i];
+      el.value = allPairContracts[i];
+      select.appendChild(el);
+    }
+
   }
 
   async _initializeEthers() {
@@ -293,11 +420,8 @@ export class Dapp extends React.Component {
   }
 
 
-  // Note that if you don't need it to update in near real time, you probably
-  // don't need to poll it. If that's the case, you can just fetch it when you
-  // initialize the app, as we do with the token data.
   _startPollingData() {
-    this._pollDataInterval = setInterval(() => this._updateBalances(), 60000);
+    this._pollDataInterval = setInterval(() => this._updateBalances(), 10000);
 
     // We run it once immediately so we don't have to wait for it
     this._updateBalanceA();
@@ -310,14 +434,11 @@ export class Dapp extends React.Component {
     this._pollDataInterval = undefined;
   }
 
-  // The next two methods just read from the contract and store the results
-  // in the component state.
   async _getTokenDataA() {
     const nameA = await this._tokenA.name();
     const symbolA = await this._tokenA.symbol();
-    console.log(nameA);
 
-    this.setState({ tokenDataA: { nameA, symbolA } });
+    this.setState({ tokenDataA: { nameA, symbolA }, tokenAddressA: this._tokenA.address });
 
   }
 
@@ -325,13 +446,37 @@ export class Dapp extends React.Component {
     const nameB = await this._tokenB.name();
     const symbolB = await this._tokenB.symbol();
 
-    this.setState({ tokenDataB: { nameB, symbolB } });
+    this.setState({ tokenDataB: { nameB, symbolB }, tokenAddressB: this._tokenB.address });
   }
 
   async _updateBalances() {
     this._updateBalanceA();
     this._updateBalanceB();
   }
+
+  // going to attempt to switch tokens and see what happens 
+  async _switchButtonState(tokenAddressA, tokenAddressB) {
+    const _newTokenA = new ethers.Contract(
+      tokenAddressA,
+      TokenAArtifact.abi,
+      this._provider.getSigner(0)
+    );
+
+    const _newTokenB = new ethers.Contract(
+      tokenAddressB,
+      TokenBArtifact.abi,
+      this._provider.getSigner(0)
+    );
+
+
+    this._tokenA = _newTokenA;
+    this._tokenB = _newTokenB;
+    this._getTokenDataA();
+    this._getTokenDataB();
+    this._updateBalanceA();
+    this._updateBalanceB()
+  }
+
 
   async _updateBalanceA() {
     const balanceA = await this._tokenA.balanceOf(this.state.selectedAddress);
@@ -343,27 +488,23 @@ export class Dapp extends React.Component {
     this.setState({ balanceB: balanceB });
   }
 
-  // This method just clears part of the state.
-  _dismissTransactionError() {
-    this.setState({ transactionError: undefined });
-  }
+  // _dismissTransactionError() {
+  //   this.setState({ transactionError: undefined });
+  // }
 
-  // This method just clears part of the state.
-  _dismissNetworkError() {
-    this.setState({ networkError: undefined });
-  }
+  // _dismissNetworkError() {
+  //   this.setState({ networkError: undefined });
+  // }
 
-  // This is an utility method that turns an RPC error into a human readable
-  // message.
-  _getRpcErrorMessage(error) {
-    if (error.data) {
-      return error.data.message;
-    }
 
-    return error.message;
-  }
+  // _getRpcErrorMessage(error) {
+  //   if (error.data) {
+  //     return error.data.message;
+  //   }
 
-  // This method resets the state
+  //   return error.message;
+  // }
+
   _resetState() {
     this.setState(this.initialState);
   }
@@ -380,8 +521,46 @@ export class Dapp extends React.Component {
       console.log(error);
     }
 
+
+    this._getPairingData();
+
+
+
   }
 
+
+  async _createNewPairing() {
+
+    const addressToken0 = document.getElementById('addresstoken0');
+    const addressToken1 = document.getElementById('addresstoken1');
+
+    console.log(addressToken0.value);
+    console.log(addressToken1.value);
+    console.log("get here");
+
+    try {
+      const tempcurrentPairing = await this._swapFactory.createPairing(addressToken0.value, addressToken1.value);
+      const currentPairing = await tempcurrentPairing.wait();
+      const newPair = currentPairing.events;
+      console.log(newPair);
+      alert("New Pair has been created");
+    } catch (error) {
+      console.log(error);
+    }
+
+    addressToken0.value = '';
+    addressToken1.value = '';
+
+    this._getPairingData();
+
+  }
+
+
+
+
+
+
+  // set up the liquidity pool for the current pair in state
   async _setUpPool() {
 
     const initialSupplyPoolApproval = ethers.utils.hexZeroPad(ethers.utils.hexlify(20000), 16);
@@ -401,8 +580,8 @@ export class Dapp extends React.Component {
 
   }
 
-  // start working on swapping function, maybe work out the front end part first
-  async _swapTokens() {
+  // logic for the actual swapping
+  async _swapTokens(tokenAddressA, tokenAddressB) {
 
     try {
       const userInputAmount = document.getElementById('currencyInputField').value;
@@ -415,36 +594,30 @@ export class Dapp extends React.Component {
         provider.getSigner(0)
       );  
 
-      const swapLibraryContract = new ethers.Contract(
-        contractAddress.SwapLibrary,
-        swapLibraryArtifact.abi,
-        provider.getSigner(0)
-      );  
-
       const reservesTx = await pairContract.getReserves();
-      // const reservesObj = await reservesTx.wait();
       console.log(reservesTx);
 
-      const reserve0 = reservesTx[0];
-      const reserve1 = reservesTx[1];
+      const token0Address = await pairContract.token0();
 
-
-      const quotePrice = await this._swapLibrary.quote(userInputAmount, reserve0, reserve1);
-      const amountInRequired = quotePrice.toNumber() * 1.04;
-
-      await this._tokenA.approve(this.state.selectedAddress, amountInRequired);
-      const resultTransfer = await this._tokenA.transferFrom(this.state.selectedAddress, this._swapFactory.allPairings(0), amountInRequired);
-      console.log(resultTransfer);
-      console.log("gets past transfer from");
-
-      // const mintTx = await this._swapRouter.addLiquidity(this._tokenA.address, this._tokenB.address,
-      //   initialSupplyPool, initialSupplyPool, initialSupplyPool, initialSupplyPool, this.state.selectedAddress);
-      // const mintInfo = await mintTx.wait();
+      var reserve0;
+      var reserve1;
+      console.log(token0Address);
+      if (tokenAddressA === token0Address){
+        reserve0 = reservesTx[0];
+        reserve1 = reservesTx[1]; 
+      } else {
+        reserve0 = reservesTx[1];
+        reserve1 = reservesTx[0];   
+      }
+      const quotePrice = await this._swapLibrary.getAmountOut(userInputAmount, reserve0, reserve1);
+      await this._tokenA.approve(this.state.selectedAddress, userInputAmount);
+      const resultTransfer = await this._tokenA.transferFrom(this.state.selectedAddress, this._swapFactory.allPairings(0), userInputAmount);
 
       // remember this is the output amount in the parameters
-      const swapTokenTx = await pairContract.swap(0, userInputAmount, this.state.selectedAddress, "0x00");
+      const swapTokenTx = await pairContract.swap(0, quotePrice, this.state.selectedAddress, "0x00");
       const swapResult = await swapTokenTx.wait();
-      console.log(swapResult);
+
+      this.resetSwapPrice();
 
     } catch (error) {
       console.error(error);
@@ -455,5 +628,7 @@ export class Dapp extends React.Component {
 
 
 
-
 }
+
+export default Dapp;
+

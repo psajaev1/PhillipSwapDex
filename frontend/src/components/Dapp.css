@@ -66,13 +66,28 @@
   
   .swapContainer {
     background-color: rgb(203, 231, 240);
-    width: 440px;
-    height: 350px;
+    width: 510px;
+    height: 380px;
     margin: 0 auto;
     top: 50%;
     border-radius: 24px;
     border: 1px solid #fff;
     padding: 6px;
+  }
+
+  .switchButton {
+    background-color: rgb(203, 231, 240);
+    border-color: #dd2f81;
+    position: relative;
+    top: 31%;
+    left: 48%;
+    width: 28px;
+    height: 28px;
+    line-height: 14px;
+    font-weight: bold;
+    text-align: center;
+    cursor: pointer;
+    font-size: 22px;
   }
   
   .swapHeader {
@@ -123,7 +138,7 @@
     text-align: right;
   }
   .tokenName {
-    font-size: 28px;
+    font-size: 22px;
     display: block;
     color: #000;
   }

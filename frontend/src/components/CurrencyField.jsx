@@ -2,6 +2,7 @@ import React from 'react';
 import { ethers } from "ethers";
 import swapFactoryArtifact from "../contracts/SwapFactory.json";
 import contractAddress from "../contracts/contract-address.json";
+import swapLibraryArtifact from "../contracts/SwapLibrary.json";
 
 import PairArtifact from "../contracts/Pair.json";
 
@@ -16,8 +17,15 @@ const CurrencyField = props => {
   const  _getSwapPrice =  async() => {
 
     var swapPrice;
+    const userInputAmount = document.getElementById('currencyInputField').value;
+    if (userInputAmount.length <= 0){
+      props.setSwapPrice(0);
+      return 0;
+    }
+
+
+
     try {
-      const userInputAmount = document.getElementById('currencyInputField').value;
       const provider = new ethers.providers.Web3Provider(window.ethereum);
 
       const swapFactoryContract = new ethers.Contract(
@@ -34,13 +42,30 @@ const CurrencyField = props => {
         provider.getSigner(0)
       );  
 
-      const allegedPriceTx = await pairContract.getSwapPrice(userInputAmount, 0, '0xd34117a3679555a44869e26d9e7605a8017c500f');
-      const allegedPriceInfo = await allegedPriceTx.wait();
-      const swapPriceTemp = allegedPriceInfo.events;
-      console.log(swapPriceTemp);
-      swapPrice = swapPriceTemp[0].data / 1000;
+      const libraryContract = new ethers.Contract(
+        contractAddress.SwapLibrary,
+        swapLibraryArtifact.abi,
+        provider.getSigner(0)
+      );
 
-      console.log(swapPrice);
+      const reservesTx = await pairContract.getReserves();
+
+      // don't think the reserves are corret when doing state switch
+      var reserve0;
+      var reserve1;
+      const token0Address = await pairContract.token0();
+      console.log(token0Address);
+      if (props.tokenAddress == token0Address){
+        reserve0 = reservesTx[0];
+        reserve1 = reservesTx[1]; 
+      } else {
+        reserve0 = reservesTx[1];
+        reserve1 = reservesTx[0];   
+      }      
+      const quotePrice = await libraryContract.getAmountOut(userInputAmount, reserve0.toNumber(), reserve1.toNumber());
+      console.log(quotePrice);
+
+      const swapPrice = quotePrice.toNumber() / userInputAmount;
 
       props.setSwapPrice(swapPrice);
 
@@ -66,7 +91,7 @@ const CurrencyField = props => {
           />
       </div>
       <div className="col-md-6 tokenContainer">
-        <span className="tokenName">{props.tokenName}</span>
+        <span className="tokenName">{props.tokenName + ' (' + props.tokenSymbol + ') '}</span>
         <div className="balanceContainer">
           <span className="balanceAmount">{message}</span>
         </div>

@@ -127,52 +127,6 @@ contract Pair is ERC20, Math {
 
     }
 
-
-    // function swap(address tokenIn, uint256 amountIn, address to)
-    //  public nonReentrant {
-
-    //     if (amountIn <= 0)
-    //         revert InsufficientInputAmount();
-
-    //     (uint112 reserve0_, uint112 reserve1_, ) = getReserves();
-
-    //     // if (amountOut0 > reserve0_ || amountOut1 > reserve1_)
-    //     //     revert InsufficientLiquidity();     
-
-
-
-        
-
-    //     uint256 amountRecieved;
-    //     if (tokenIn == token0)
-    //         amountRecieved = SwapLibrary.getAmountOut(amountIn, reserve0_, reserve1_);
-    //     else 
-    //         amountRecieved = SwapLibrary.getAmountOut(amountIn, reserve1_, reserve0_);
-
-    //     address tokenOut = tokenIn == token0 ? token1 : token0;
-
-    //     // you trade in the tokens, then contract gives you it back 
-    //     _safeTransferFrom(tokenIn, to, address(this), amountIn);
-
-    //     _safeTransferFrom(tokenOut, address(this), to, amountRecieved);
-
-
-    //     uint256 balance0 = IERC20(token0).balanceOf(address(this));
-    //     uint256 balance1 = IERC20(token1).balanceOf(address(this));
-
-    //     // // not sure what to do with constant product check
-    //     // uint256 balanceAdjusted0 = (balance0 * 1000) - (amountIn0 * 3);
-    //     // uint256 balanceAdjusted1 = (balance1 * 1000) - (amountIn1 * 3);
-
-    //     if (balance0 * balance1 < uint256(reserve0_) * uint256(reserve1_) * 1000**2)
-    //         revert InvalidProduct();
-
-    //     _update(balance0, balance1, reserve0_, reserve1_);
-    //     emit Swap(msg.sender, amountIn, amountRecieved, to);
-
-        
-    // }
-
     function swap(
         uint256 amount0Out,
         uint256 amount1Out,
@@ -184,6 +138,12 @@ contract Pair is ERC20, Math {
 
         // 
         (uint112 reserve0_, uint112 reserve1_, ) = getReserves();
+
+        console.log(reserve0_);
+        console.log(reserve1_);
+        console.log(reserve0);
+        console.log(reserve1);
+
 
         if (amount0Out > reserve0_ || amount1Out > reserve1_)
             revert InsufficientLiquidity();
@@ -197,14 +157,6 @@ contract Pair is ERC20, Math {
         //         amount1Out,
         //         data
         //     );
-        console.log("!!!");
-        console.log(reserve0_);
-        console.log(reserve1_);
-        console.log(amount0Out);
-        console.log(amount1Out);
-        console.log(reserve0);
-        console.log(reserve1);
-
 
 
         uint256 balance0 = IERC20(token0).balanceOf(address(this));
@@ -212,12 +164,14 @@ contract Pair is ERC20, Math {
 
         console.log(balance0);
         console.log(balance1);
+        console.log(reserve0);
+        console.log(reserve1);
 
-        uint256 amount0In = balance0 > reserve0_ - amount0Out
-            ? balance0 - (reserve0_ - amount0Out)
+        uint256 amount0In = balance0 > reserve0 - amount0Out
+            ? balance0 - (reserve0 - amount0Out)
             : 0;
-        uint256 amount1In = balance1 > reserve1_ - amount1Out
-            ? balance1 - (reserve1_ - amount1Out)
+        uint256 amount1In = balance1 > reserve1 - amount1Out
+            ? balance1 - (reserve1 - amount1Out)
             : 0;
 
         if (amount0In == 0 && amount1In == 0) revert InsufficientInputAmount();
@@ -226,16 +180,16 @@ contract Pair is ERC20, Math {
         uint256 balance0Adjusted = (balance0 * 1000) - (amount0In * 3);
         uint256 balance1Adjusted = (balance1 * 1000) - (amount1In * 3);
 
+
         if (
             balance0Adjusted * balance1Adjusted <
             uint256(reserve0_) * uint256(reserve1_) * (1000**2)
         ) revert InvalidProduct();
 
-        _update(balance0, balance1, reserve0, reserve1);
+        _update(balance0, balance1, reserve0_, reserve1_);
 
         emit Swap(msg.sender, amount0Out, amount1Out, to);
     }
-
 
     function getSwapPrice(uint256 amountOut0, uint256 amountOut1, address to) public {
         if (amountOut0 == 0 && amountOut1 == 0)
@@ -333,9 +287,6 @@ contract Pair is ERC20, Math {
             revert SafeTransferFailed();    
 
     }
-
-
-
 
 }
 

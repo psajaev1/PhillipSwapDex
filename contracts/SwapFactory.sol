@@ -48,4 +48,9 @@ contract SwapFactory {
         emit PairCreated(token0, token1, pairing, allPairings.length);
 
     }
+
+    function getPairingSize() public view returns (uint256) {
+        return allPairings.length;
+    }
+
 }
